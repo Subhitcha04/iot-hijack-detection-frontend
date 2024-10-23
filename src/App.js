@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios'; // Import Axios for making API calls
 import {
   LineChart,
   Line,
@@ -13,16 +12,28 @@ import {
 import { AlertTriangle, Shield, Activity, Wifi, Lock, User, Key } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from './components/ui/Card';
 import Alert from './components/ui/Alert';
-import AlertTitle from './components/ui/AlertTitle'; // If AlertTitle is a separate file
-
+import AlertTitle from './components/ui/AlertTitle';
 import { Button } from './components/ui/Button';
 import { Input } from './components/ui/Input';
 
+// Possible malware types
+const malwareTypes = [
+  'Trojan',
+  'Ransomware',
+  'Worm',
+  'Spyware',
+  'Adware',
+  'Rootkit',
+];
+
+// Function to generate random data for the charts
 const generateRandomData = (length) => {
-  return Array.from({ length }, (_, i) => ({
-    time: `${i}:00`,
+  return Array.from({ length }, (_, index) => ({
+    time: new Date().toLocaleTimeString(), // Time stamps with current time
     anomalyScore: Math.random() * 100,
     trafficVolume: Math.floor(Math.random() * 1000),
+    iotDeviceId: `Device-${index + 1}`, // Add IoT device ID
+    malwareType: malwareTypes[Math.floor(Math.random() * malwareTypes.length)], // Randomly assign malware type
   }));
 };
 
@@ -84,27 +95,8 @@ const NetworkSecurityDashboard = () => {
   const [securedDevices, setSecuredDevices] = useState(0);
   const [totalDevices, setTotalDevices] = useState(42);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
-
-  // Function to make API call to the backend and get the model prediction
-  const handleModelPrediction = async (inputData) => {
-    try {
-      const response = await axios.post('http://localhost:5000/predict', {
-        data: inputData, // You should send appropriate input features
-      });
-      const prediction = response.data.prediction;
-      console.log('Prediction from the model:', prediction);
-
-      // Update the state based on the prediction
-      if (prediction === 1) {
-        setAlerts((prev) => [
-          ...prev,
-          { id: Date.now(), message: 'Anomaly Detected! Immediate Action Required.', severity: 'high' },
-        ]);
-      }
-    } catch (error) {
-      console.error('Error during prediction API call', error);
-    }
-  };
+  const [attackedDevice, setAttackedDevice] = useState(null);
+  const [showInformMessage, setShowInformMessage] = useState(false);
 
   useEffect(() => {
     if (!isLoggedIn) return;
@@ -114,14 +106,26 @@ const NetworkSecurityDashboard = () => {
         const newData = [
           ...prevData.slice(1),
           {
-            time: `${new Date().getHours()}:00`,
+            time: new Date().toLocaleTimeString(), // Real-time timestamps
             anomalyScore: Math.random() * 100,
             trafficVolume: Math.floor(Math.random() * 1000),
+            iotDeviceId: `Device-${prevData.length + 1}`, // Assign IoT device ID
+            malwareType: malwareTypes[Math.floor(Math.random() * malwareTypes.length)], // Randomly assign malware type
           },
         ];
 
         if (newData[newData.length - 1].anomalyScore > 80) {
-          handleModelPrediction([newData[newData.length - 1].trafficVolume]); // Pass the necessary input data to the model
+          setAlerts((prev) => [
+            ...prev,
+            {
+              id: Date.now(),
+              message: (
+                <span className="text-red-600">High anomaly score detected! Possible IoT device hijacking attempt.</span>
+              ),
+              severity: 'warning',
+            },
+          ]);
+          setAttackedDevice(newData[newData.length - 1]); // Set attacked device info
         }
 
         return newData;
@@ -144,6 +148,18 @@ const NetworkSecurityDashboard = () => {
     ]);
   };
 
+  const handleInformSupport = () => {
+    setShowInformMessage(true);
+    setTimeout(() => {
+      setShowInformMessage(false);
+    }, 3000); // Hide message after 3 seconds
+  };
+
+  const handleDisconnectDevice = () => {
+    setTotalDevices((prev) => prev - 1);
+    setAttackedDevice(null); // Clear attacked device after disconnect
+  };
+
   if (!isLoggedIn) {
     return <LoginPage onLogin={() => setIsLoggedIn(true)} />;
   }
@@ -153,41 +169,90 @@ const NetworkSecurityDashboard = () => {
       <h1 className="text-3xl font-bold mb-6 text-black">Network Security Dashboard</h1>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
-        {/* Your existing card structure */}
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-        {/* Your charts for Network Anomaly Score and Network Traffic Volume */}
-      </div>
-
-      <div className="space-y-4 mb-6">
-        <h2 className="text-2xl font-bold text-black">Recent Alerts</h2>
-        {alerts.slice(-5).reverse().map((alert) => (
-          <Alert
-            key={alert.id}
-            variant={alert.severity === 'high' ? 'destructive' : 'default'}
-            className={`bg-white bg-opacity-70 backdrop-blur-sm border ${
-              alert.severity === 'high' ? 'border-red-600' : 'border-green-600'
-            }`}
-          >
-            <AlertTitle>{alert.message}</AlertTitle>
-          </Alert>
+        {[
+          { title: "Active Threats", value: alerts.length, icon: AlertTriangle, color: "text-rose-600", bgColor: "bg-rose-100" },
+          { title: "Protected Devices", value: securedDevices, icon: Shield, color: "text-emerald-600", bgColor: "bg-emerald-100" },
+          { title: "Network Load", value: "78%", icon: Activity, color: "text-blue-600", bgColor: "bg-blue-100" },
+          { title: "IoT Devices", value: totalDevices, icon: Wifi, color: "text-violet-600", bgColor: "bg-violet-100" },
+          { title: "Secured IoT Devices", value: securedDevices, icon: Lock, color: "text-amber-600", bgColor: "bg-amber-100" }
+        ].map((item, index) => (
+          <Card key={index} className={`flex flex-col justify-between rounded-lg overflow-hidden shadow-md border-0 ${item.bgColor}`}>
+            <CardHeader className="bg-opacity-40 bg-white p-4">
+              <CardTitle className="text-sm font-medium flex justify-between items-center text-slate-700">
+                {item.title}
+                <item.icon className={`h-4 w-4 ${item.color}`} />
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-4 flex-grow flex items-center justify-center">
+              <div className="text-2xl font-bold text-slate-800">{item.value}</div>
+            </CardContent>
+          </Card>
         ))}
       </div>
 
-      <Button onClick={handleSecureDevices} className="bg-emerald-600 text-white">
-        Secure 5 IoT Devices
-      </Button>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+        <Card className="rounded-lg overflow-hidden shadow-md border-0 bg-white bg-opacity-70 backdrop-blur-sm">
+          <CardHeader className="bg-opacity-40 bg-sky-100">
+            <CardTitle className="text-black">Network Anomaly Score</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ResponsiveContainer width="100%" height={300}>
+              <LineChart data={data}>
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(100,116,139,0.2)" />
+                <XAxis dataKey="time" stroke="#475569" />
+                <YAxis stroke="#475569" />
+                <Tooltip contentStyle={{ backgroundColor: 'rgba(255,255,255,0.9)', border: '1px solid #e2e8f0' }} />
+                <Legend />
+                <Line type="monotone" dataKey="anomalyScore" stroke="red" /> {/* Anomaly score line in red */}
+              </LineChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+
+        <Card className="rounded-lg overflow-hidden shadow-md border-0 bg-white bg-opacity-70 backdrop-blur-sm">
+          <CardHeader className="bg-opacity-40 bg-green-100">
+            <CardTitle className="text-black">Network Traffic Volume</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ResponsiveContainer width="100%" height={300}>
+              <LineChart data={data}>
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(100,116,139,0.2)" />
+                <XAxis dataKey="time" stroke="#475569" />
+                <YAxis stroke="#475569" />
+                <Tooltip contentStyle={{ backgroundColor: 'rgba(255,255,255,0.9)', border: '1px solid #e2e8f0' }} />
+                <Legend />
+                <Line type="monotone" dataKey="trafficVolume" stroke="green" /> {/* Traffic volume line in green */}
+              </LineChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+      </div>
+
+      {showInformMessage && (
+        <Alert>
+          <AlertTitle>Support Information</AlertTitle>
+          <p>Please inform your IT support team about the recent attacks.</p>
+          <Button onClick={() => setShowInformMessage(false)}>Dismiss</Button>
+        </Alert>
+      )}
+
+      {attackedDevice && (
+        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative" role="alert">
+          <strong className="font-bold">Alert!</strong>
+          <span className="block sm:inline">Detected a security breach in {attackedDevice.iotDeviceId}!</span>
+          <span className="block sm:inline">Malware Type: {attackedDevice.malwareType}</span>
+          <div className="mt-2 flex justify-end">
+            <Button onClick={handleInformSupport} className="mr-2">
+              Inform Support
+            </Button>
+            <Button onClick={handleDisconnectDevice} color="danger">Disconnect Device</Button>
+          </div>
+        </div>
+      )}
+
+      <Button onClick={handleSecureDevices} className="mt-4">Secure More Devices</Button>
     </div>
   );
 };
 
-const App = () => {
-  return (
-    <div>
-      <NetworkSecurityDashboard />
-    </div>
-  );
-};
-
-export default App;
+export default NetworkSecurityDashboard;
